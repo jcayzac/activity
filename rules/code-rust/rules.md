@@ -1,3 +1,7 @@
+---
+when:
+  - Writing, modifying or reviewing Rust code of any kind.
+---
 # Rust Code Rules
 
 This rule book contains the enforceable Rust coding rules for this repository. Use it for writing and reviewing code. Companion files under section directories in this book carry rationale and source provenance for individual rules.

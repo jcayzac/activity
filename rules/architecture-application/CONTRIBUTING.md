@@ -16,7 +16,7 @@ Terms such as "domain", "use case", "application service", "port", and "adapter"
 - [SC] Screaming Architecture: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
 - [HEX] Hexagonal architecture the original 2005 article: https://alistair.cockburn.us/hexagonal-architecture/
 - [OA] The Onion Architecture : part 1: https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/
-- [MS] Common web application architectures: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures
+- [MS] Common web application architectures: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-architecture-applications
 - [SL] Service Layer: https://martinfowler.com/eaaCatalog/serviceLayer.html
 - [FOW] Inversion of Control Containers and the Dependency Injection pattern: https://martinfowler.com/articles/injection.html
 - [LAY] Layering Principles: https://martinfowler.com/bliki/LayeringPrinciples.html

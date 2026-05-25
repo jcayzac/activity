@@ -10,5 +10,13 @@ if ! cargo nextest --version >/dev/null 2>&1; then
   cargo install cargo-nextest --locked
 fi
 
+if ! cargo audit --version >/dev/null 2>&1; then
+  echo "pre-push: installing cargo-audit"
+  cargo install cargo-audit --locked
+fi
+
 echo "pre-push: cargo nextest run --workspace --lib"
 cargo nextest run --workspace --lib
+
+echo "pre-push: cargo audit"
+cargo audit -D warnings

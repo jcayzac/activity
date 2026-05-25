@@ -1,3 +1,7 @@
+---
+when:
+  - Writing, modifying or reviewing rule books.
+---
 # Rule Book Rules
 
 This rule book contains the enforceable structure and authoring rules for the
@@ -71,6 +75,24 @@ relationship and the resolution.
 
 ## Document Set
 
+### `document-shape/frontmatter-when`
+
+Use YAML frontmatter in `rules.md` to declare applicability
+
+**Rule:** Start each book's `rules.md` with a YAML frontmatter block before the
+title. The frontmatter must declare a `when` key whose value is a
+YAML list of short statements describing the kinds of work the book applies to.
+Use the list form even when there is only one `when` statement.
+
+**Good**
+
+```md
+---
+when:
+  - Writing, modifying or reviewing Rust code of any kind.
+---
+```
+
 ### `document-shape/shell`
 
 Use the same book-level layout
@@ -87,7 +109,7 @@ exactly these canonical files:
 
 ```text
 rules/
-  rust-code/
+  code-rust/
     CONTRIBUTING.md
     rules.md
     imports/

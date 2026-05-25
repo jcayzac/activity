@@ -33,7 +33,6 @@ memchr     = "2"
 rusqlite   = { version = "0.32", features = ["bundled"] }
 # test
 pretty_assertions = "1"
-tempfile          = "3"
 # build
 prost-build = "0.13"
 # internal

@@ -1,3 +1,7 @@
+---
+when:
+  - Designing, modifying or reviewing the architecture of any application.
+---
 # Application Architecture Rules
 
 This rule book contains the enforceable architectural rules for Rust applications in this repository. Use it for high-level design and architectural review. Companion files under section directories in this book carry rationale and source provenance for individual rules.

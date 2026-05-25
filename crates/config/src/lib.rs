@@ -1,5 +1,5 @@
 #![warn(clippy::all)]
-#![cfg_attr(not(test), forbid(unsafe_code))]
+#![forbid(unsafe_code)]
 
 use camino::Utf8PathBuf;
 use miette::Diagnostic;
@@ -108,8 +108,28 @@ fn config_base_dir() -> Result<Utf8PathBuf, ConfigError> {
     Ok(Utf8PathBuf::from(home).join(".config"))
 }
 
-/// Loads config from the platform config dir. Creates the template file and
-/// returns an error if it doesn't exist yet or if `office.ssid` is not set.
+/// Parses a TOML string into a [`Config`].
+///
+/// Separated from file I/O so it can be tested without touching the filesystem.
+pub(crate) fn parse_config(contents: &str, path: &Utf8PathBuf) -> Result<Config, ConfigError> {
+    let raw: RawConfig = toml::from_str(contents).map_err(|e| ConfigError::Parse {
+        path: path.clone(),
+        source: e,
+    })?;
+
+    let office_ssid = raw
+        .office
+        .and_then(|o| o.ssid)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ConfigError::MissingSsid { path: path.clone() })?;
+
+    Ok(Config { office_ssid })
+}
+
+/// Loads config from the platform config dir.
+///
+/// Creates a template file and returns an error if the file does not exist yet.
+/// Returns an error if `[office] ssid` is not set.
 pub fn load_config() -> miette::Result<Config> {
     let config_dir = config_base_dir()
         .map(|base| base.join("io.github.jcayzac.activity"))
@@ -144,20 +164,7 @@ pub fn load_config() -> miette::Result<Config> {
         })
     })?;
 
-    let raw: RawConfig = toml::from_str(&contents).map_err(|e| {
-        miette::Report::from(ConfigError::Parse {
-            path: config_path.clone(),
-            source: e,
-        })
-    })?;
-
-    let office_ssid = raw
-        .office
-        .and_then(|o| o.ssid)
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| miette::Report::from(ConfigError::MissingSsid { path: config_path }))?;
-
-    Ok(Config { office_ssid })
+    parse_config(&contents, &config_path).map_err(miette::Report::from)
 }
 
 // ---------------------------------------------------------------------------
@@ -166,125 +173,33 @@ pub fn load_config() -> miette::Result<Config> {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_CONFIG, RawConfig, load_config};
+    use camino::Utf8PathBuf;
 
-    #[test]
-    fn parse_valid_toml() {
-        let toml = "[office]\nssid = \"my-office\"";
-        let raw: RawConfig = toml::from_str(toml).expect("should parse");
-        assert_eq!(raw.office.unwrap().ssid.unwrap(), "my-office");
+    use super::parse_config;
+
+    fn dummy_path() -> Utf8PathBuf {
+        Utf8PathBuf::from("/config.toml")
     }
 
     #[test]
-    fn missing_ssid_is_none() {
-        let toml = "[office]\n";
-        let raw: RawConfig = toml::from_str(toml).expect("should parse");
-        assert!(raw.office.unwrap().ssid.is_none());
+    fn valid_config_parses() {
+        let config =
+            parse_config("[office]\nssid = \"my-office\"", &dummy_path()).expect("should parse");
+        assert_eq!(config.office_ssid, "my-office");
     }
 
     #[test]
-    fn missing_section_is_none() {
-        let toml = "";
-        let raw: RawConfig = toml::from_str(toml).expect("should parse");
-        assert!(raw.office.is_none());
+    fn missing_ssid_is_error() {
+        assert!(parse_config("[office]\n", &dummy_path()).is_err());
     }
 
     #[test]
-    fn invalid_toml_returns_error() {
-        let toml = "[office\nssid = [not valid";
-        let result: Result<RawConfig, _> = toml::from_str(toml);
-        assert!(result.is_err());
+    fn missing_section_is_error() {
+        assert!(parse_config("", &dummy_path()).is_err());
     }
 
     #[test]
-    fn load_config_creates_template_and_errors() {
-        let tmp = tempfile::tempdir().expect("temp dir");
-        let tmp_path = tmp.path().to_str().expect("utf8 path");
-
-        let _guard = EnvGuard::set("HOME", tmp_path);
-        let _guard2 = EnvGuard::unset("XDG_CONFIG_HOME");
-
-        let result = load_config();
-        assert!(
-            result.is_err(),
-            "should error when config file is newly created"
-        );
-
-        let config_path = format!(
-            "{}/.config/io.github.jcayzac.activity/config.toml",
-            tmp_path
-        );
-        let written = std::fs::read_to_string(&config_path).expect("file should exist");
-        assert!(written.contains("[office]"));
-        assert!(
-            !written.contains("r-intra"),
-            "template must not hardcode r-intra"
-        );
-        assert!(
-            written.contains("# ssid ="),
-            "ssid must be commented out in template"
-        );
-    }
-
-    #[test]
-    fn load_config_errors_when_ssid_commented_out() {
-        let tmp = tempfile::tempdir().expect("temp dir");
-        let tmp_path = tmp.path().to_str().expect("utf8 path");
-        let config_dir = format!("{}/.config/io.github.jcayzac.activity", tmp_path);
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(format!("{}/config.toml", config_dir), DEFAULT_CONFIG).unwrap();
-
-        let _guard = EnvGuard::set("HOME", tmp_path);
-        let _guard2 = EnvGuard::unset("XDG_CONFIG_HOME");
-
-        let result = load_config();
-        assert!(result.is_err(), "should error when ssid is not set");
-    }
-
-    #[test]
-    fn load_config_succeeds_with_ssid_set() {
-        let tmp = tempfile::tempdir().expect("temp dir");
-        let tmp_path = tmp.path().to_str().expect("utf8 path");
-        let config_dir = format!("{}/.config/io.github.jcayzac.activity", tmp_path);
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            format!("{}/config.toml", config_dir),
-            "[office]\nssid = \"corp-wifi\"\n",
-        )
-        .unwrap();
-
-        let _guard = EnvGuard::set("HOME", tmp_path);
-        let _guard2 = EnvGuard::unset("XDG_CONFIG_HOME");
-
-        let config = load_config().expect("should succeed");
-        assert_eq!(config.office_ssid, "corp-wifi");
-    }
-
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<String>,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: &str) -> Self {
-            let original = std::env::var(key).ok();
-            unsafe { std::env::set_var(key, value) };
-            Self { key, original }
-        }
-
-        fn unset(key: &'static str) -> Self {
-            let original = std::env::var(key).ok();
-            unsafe { std::env::remove_var(key) };
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match &self.original {
-                Some(v) => unsafe { std::env::set_var(self.key, v) },
-                None => unsafe { std::env::remove_var(self.key) },
-            }
-        }
+    fn invalid_toml_is_error() {
+        assert!(parse_config("[office\nssid = [not valid", &dummy_path()).is_err());
     }
 }

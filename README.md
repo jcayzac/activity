@@ -4,13 +4,13 @@ A macOS CLI tool that reconstructs a timeline of computer usage for a given day 
 
 ## Prerequisites
 
-- macOS (tested on macOS 15+)
+- macOS (tested on macOS 26+)
 - Terminal must have **Full Disk Access** granted in System Settings → Privacy & Security for data sources that require it (Powerlog, Biome streams, knowledgeC.db, WiFi log). The tool will display a clear error message if access is missing.
 
 ## Installation
 
 ```sh
-cargo install --path crates/cli
+cargo install --path crates/activity
 ```
 
 Or build without installing:
@@ -22,15 +22,7 @@ cargo build --release
 
 ## Configuration
 
-On first run, a template config file is created at:
-
-```
-$XDG_CONFIG_HOME/io.github.jcayzac.activity/config.toml
-# or if XDG_CONFIG_HOME is not set:
-~/.config/io.github.jcayzac.activity/config.toml
-```
-
-Edit it and set your office WiFi SSID:
+On first run, a template config file is created at `$XDG_CONFIG_HOME/io.github.jcayzac.activity/config.toml` (or `~/.config/io.github.jcayzac.activity/config.toml` if `XDG_CONFIG_HOME` is not set). Edit this file to set your office WiFi SSID:
 
 ```toml
 [office]
@@ -55,12 +47,6 @@ Options:
 
 ## Cache
 
-Processed data is cached in SQLite databases under:
-
-```
-$XDG_CACHE_HOME/io.github.jcayzac.activity/
-# or if XDG_CACHE_HOME is not set:
-~/.cache/io.github.jcayzac.activity/
-```
+Processed data is cached in SQLite databases under `$XDG_CACHE_HOME/io.github.jcayzac.activity/` (or `~/.cache/io.github.jcayzac.activity/` if `XDG_CACHE_HOME` is not set) to speed up subsequent runs.
 
 Some macOS data sources have a rolling retention window of around 10 days. Data outside that window is preserved only if it was previously cached.

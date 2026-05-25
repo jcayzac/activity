@@ -15,5 +15,5 @@ Architecture" [CA].
 <!-- References -->
 
 [FOW]: https://martinfowler.com/articles/injection.html "Inversion of Control Containers and the Dependency Injection pattern"
-[MS]: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures "Common web application architectures"
+[MS]: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-architecture-applications "Common web application architectures"
 [CA]: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html "The Clean Architecture"

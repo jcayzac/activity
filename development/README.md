@@ -18,16 +18,17 @@ cargo nextest run                   # all tests
 cargo nextest run -p timeline       # tests for one crate
 ```
 
-## Linting and formatting
+## Linting, formatting, and auditing
 
 ```sh
 cargo lint               # clippy -D warnings
 cargo lint-fix           # clippy --fix
 cargo fmt-fix            # rustfmt
 cargo fmt --all --check  # format check only
+cargo audit -D warnings  # check dependencies for known vulnerabilities (fails on any advisory)
 ```
 
-These aliases are defined in `.cargo/config.toml`.
+The `fmt-fix`, `lint`, and `lint-fix` aliases are defined in `.cargo/config.toml`. `cargo audit` is an external subcommand that must be installed once with `cargo install cargo-audit --locked`.
 
 ## Git hooks
 
@@ -43,5 +44,5 @@ These aliases are defined in `.cargo/config.toml`.
 
 Coding and architecture rules are in [`rules/`](../rules/):
 
-- [`rules/rust-code/rules.md`](../rules/rust-code/rules.md) — Rust coding conventions
-- [`rules/application-architecture/rules.md`](../rules/application-architecture/rules.md) — architecture rules
+- [`rules/code-rust/rules.md`](../rules/code-rust/rules.md) — Rust coding conventions
+- [`rules/architecture-application/rules.md`](../rules/architecture-application/rules.md) — architecture rules

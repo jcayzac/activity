@@ -260,7 +260,6 @@ dependencies = [
  "camino",
  "miette",
  "serde",
- "tempfile",
  "thiserror",
  "toml",
 ]

@@ -14,5 +14,5 @@ architectures" [MS]; "Layering Principles" [LAY].
 <!-- References -->
 
 [CA]: https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html "The Clean Architecture"
-[MS]: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-application-architectures "Common web application architectures"
+[MS]: https://learn.microsoft.com/en-us/dotnet/architecture/modern-web-apps-azure/common-web-architecture-applications "Common web application architectures"
 [LAY]: https://martinfowler.com/bliki/LayeringPrinciples.html "Layering Principles"
