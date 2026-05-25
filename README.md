@@ -2,6 +2,8 @@
 
 A macOS CLI tool that reconstructs a timeline of computer usage for a given day or month. It reads from several macOS system data sources, classifies each period as active work, a break, or transit, and reports whether the day was worked from the office (RTO — Return To Office).
 
+![Screenshot](screenshot.avif)
+
 ## Prerequisites
 
 - macOS (tested on macOS 26+)
