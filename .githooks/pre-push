@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+if ! cargo nextest --version >/dev/null 2>&1; then
+  echo "pre-push: installing cargo-nextest"
+  cargo install cargo-nextest --locked
+fi
+
+echo "pre-push: cargo nextest run --workspace --lib"
+cargo nextest run --workspace --lib

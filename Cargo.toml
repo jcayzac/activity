@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members  = ["crates/*"]
+
+[workspace.package]
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.94.0"
+authors      = ["Julien Cayzac"]
+license      = "MIT"
+
+[workspace.dependencies]
+# cli
+clap       = { version = "4", features = ["derive"] }
+# paths
+camino     = "1"
+# errors
+anyhow     = "1"
+miette     = { version = "7", features = ["fancy"] }
+thiserror  = "2"
+# data
+serde      = { version = "1", features = ["derive"] }
+toml       = "0.8"
+chrono     = { version = "0.4", features = ["serde"] }
+# protobuf
+prost      = "0.13"
+prost-types = "0.13"
+# async
+tokio      = { version = "1", features = ["full"] }
+futures    = "0.3"
+memchr     = "2"
+# sqlite
+rusqlite   = { version = "0.32", features = ["bundled"] }
+# test
+pretty_assertions = "1"
+tempfile          = "3"
+# build
+prost-build = "0.13"
+# internal
+config   = { path = "crates/config" }
+proto    = { path = "crates/proto" }
+sources  = { path = "crates/sources" }
+timeline = { path = "crates/timeline" }
+location = { path = "crates/location" }
+report   = { path = "crates/report" }

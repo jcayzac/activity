@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+stash_before=""
+stash_after=""
+stashed_changes=0
+lint_fix_status=0
+
+restore_unstaged_changes() {
+  local status="$1"
+
+  if [[ "${stashed_changes}" -eq 1 ]]; then
+    if ! git stash pop --quiet; then
+      echo "pre-commit: failed to restore unstaged changes cleanly" >&2
+      echo "pre-commit: the most recent stash still contains your unstaged changes" >&2
+      status=1
+    fi
+  fi
+
+  exit "${status}"
+}
+
+trap 'restore_unstaged_changes $?' EXIT
+
+if ! git diff --quiet --ignore-submodules -- || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  echo "pre-commit: temporarily stashing unstaged changes"
+  stash_before="$(git rev-parse -q --verify refs/stash || true)"
+  git stash push --keep-index --include-untracked --quiet -m "pre-commit-autofix" >/dev/null
+  stash_after="$(git rev-parse -q --verify refs/stash || true)"
+  if [[ "${stash_before}" != "${stash_after}" ]]; then
+    stashed_changes=1
+  fi
+fi
+
+echo "pre-commit: cargo lint-fix"
+if cargo lint-fix; then
+  :
+else
+  lint_fix_status=$?
+fi
+
+echo "pre-commit: cargo fmt-fix"
+cargo fmt-fix
+
+echo "pre-commit: restaging auto-fixes"
+git add -A
+
+echo "pre-commit: cargo fmt --all --check"
+cargo fmt --all --check
+
+if [[ "${lint_fix_status}" -ne 0 ]]; then
+  echo "pre-commit: some lint issues could not be auto-fixed" >&2
+  exit "${lint_fix_status}"
+fi

@@ -1,0 +1,18 @@
+syntax = "proto3";
+package biome;
+
+// WiFi connection record (reverse-engineered, parsed after /wifi/connection marker).
+// field 2: outer wrapper containing session data
+message WifiConnectionRecord {
+  WifiSession session = 2;
+}
+
+message WifiSession {
+  double cocoa_start = 2;
+  double cocoa_end   = 3;
+  WifiSsidWrapper ssid_wrapper = 4;
+}
+
+message WifiSsidWrapper {
+  string ssid = 3;
+}

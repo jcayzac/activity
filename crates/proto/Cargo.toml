@@ -1,0 +1,17 @@
+[package]
+name        = "proto"
+version.workspace     = true
+edition.workspace     = true
+rust-version.workspace = true
+authors.workspace     = true
+license.workspace     = true
+
+[dependencies]
+prost       = { workspace = true }
+prost-types = { workspace = true }
+memchr      = { workspace = true }
+thiserror   = { workspace = true }
+camino      = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }

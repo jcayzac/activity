@@ -1,0 +1,31 @@
+syntax = "proto3";
+package biome;
+
+// App.InFocus focus-change event (reverse-engineered from SEGB stream).
+//
+// Each SEGB record contains one InFocusRecord followed by a non-protobuf
+// 7-byte trailer (3 zero bytes + 4-byte checksum). Because of this trailer,
+// prost::decode fails on any record that reaches that boundary. The decoder
+// in src/lib.rs uses a tolerant manual field reader instead.
+//
+// Observed fields:
+//   field 2:  always 1 (record type enum)
+//   field 3:  0=app lost focus, 1=app gained focus
+//   field 4:  Cocoa timestamp (seconds since 2001-01-01, as double)
+//   field 6:  bundle ID of the app
+//   field 9:  IP address string (e.g. "147.1.89.143")
+//   field 10: partial address / subnet string
+//   field 11: bool (purpose unknown)
+//   field 12: bool (purpose unknown)
+//   field 13: uint32 (purpose unknown)
+message InFocusRecord {
+  int32  record_type  = 2;
+  int32  focus_gained = 3;
+  double cocoa_ts     = 4;
+  bytes  bundle_id    = 6;
+  string ip_address   = 9;
+  string field10      = 10;
+  bool   field11      = 11;
+  bool   field12      = 12;
+  uint32 field13      = 13;
+}
