@@ -1,6 +1,6 @@
 # Validate at the boundary, preferably in the type system
 
-Rule id: `errors/validate-at-boundary-type-system`
+Rule id: `errors/boundary-type-validation`
 
 **Rationale:** Static validation catches errors earlier and once. Dynamic
 validation duplicates work and pushes failures farther from the source.

@@ -67,7 +67,7 @@ fn collect_record_ranges(data: &[u8]) -> Vec<(usize, usize)> {
             // If the buffer is exhausted here or the byte is 0x00/0xff, this
             // is the header sentinel.
             let sentinel = data.get(payload_start).copied();
-            if sentinel.map_or(true, |b| b == 0x00 || b == 0xff) {
+            if sentinel.is_none_or(|b| b == 0x00 || b == 0xff) {
                 header_consumed = true;
                 search_start = payload_start;
                 continue;

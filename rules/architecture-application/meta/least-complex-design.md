@@ -1,6 +1,6 @@
 # Choose the least complex design that preserves the rules
 
-Rule id: `simplicity/least-complex-design`
+Rule id: `meta/least-complex-design`
 
 **Rationale:** Indirection is a cost, not a virtue. The goal is clear
 responsibility and replaceable details, not architectural ceremony.

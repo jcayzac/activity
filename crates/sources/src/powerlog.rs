@@ -9,6 +9,8 @@ use camino::Utf8Path;
 use rusqlite::Connection;
 use tokio::process::Command;
 
+use crate::SourcesError;
+
 const POWERLOG_DIR: &str = "/private/var/db/powerlog/Library/BatteryLife";
 const LIVE_TTL_MS: i64 = 5 * 60_000;
 
@@ -389,50 +391,50 @@ pub async fn open_powerlog_db(
     Ok(db)
 }
 
-pub fn all_bl_events(db: &Connection) -> Vec<BlEvent> {
+pub fn all_bl_events(db: &Connection) -> Result<Vec<BlEvent>, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT time, active FROM bl_events ORDER BY time")
-        .expect("failed to prepare bl_events query");
-    stmt.query_map([], |row| {
-        Ok(BlEvent {
-            time_ms: row.get(0)?,
-            active: row.get::<_, i64>(1)? == 1,
-        })
-    })
-    .expect("failed to query bl_events")
-    .filter_map(|r| r.ok())
-    .collect()
+        .prepare_cached("SELECT time, active FROM bl_events ORDER BY time")?;
+    let events = stmt
+        .query_map([], |row| {
+            Ok(BlEvent {
+                time_ms: row.get(0)?,
+                active: row.get::<_, i64>(1)? == 1,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(events)
 }
 
-pub fn all_focus_events(db: &Connection) -> Vec<FocusEvent> {
+pub fn all_focus_events(db: &Connection) -> Result<Vec<FocusEvent>, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT time, bundle_id FROM focus_events ORDER BY time")
-        .expect("failed to prepare focus_events query");
-    stmt.query_map([], |row| {
-        Ok(FocusEvent {
-            time_ms: row.get(0)?,
-            bundle_id: row.get(1)?,
-        })
-    })
-    .expect("failed to query focus_events")
-    .filter_map(|r| r.ok())
-    .collect()
+        .prepare_cached("SELECT time, bundle_id FROM focus_events ORDER BY time")?;
+    let events = stmt
+        .query_map([], |row| {
+            Ok(FocusEvent {
+                time_ms: row.get(0)?,
+                bundle_id: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(events)
 }
 
-pub fn aggregate_screen_on(db: &Connection, start_ms: i64, end_ms: i64) -> Vec<AggScreenOn> {
-    let mut stmt = db
-        .prepare_cached(
-            "SELECT time, screen_on FROM aggregate_screen_on \
-             WHERE time >= ?1 AND time <= ?2 ORDER BY time",
-        )
-        .expect("failed to prepare aggregate_screen_on query");
-    stmt.query_map([start_ms, end_ms], |row| {
-        Ok(AggScreenOn {
-            time_ms: row.get(0)?,
-            screen_on_secs: row.get(1)?,
-        })
-    })
-    .expect("failed to query aggregate_screen_on")
-    .filter_map(|r| r.ok())
-    .collect()
+pub fn aggregate_screen_on(
+    db: &Connection,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<Vec<AggScreenOn>, SourcesError> {
+    let mut stmt = db.prepare_cached(
+        "SELECT time, screen_on FROM aggregate_screen_on \
+         WHERE time >= ?1 AND time <= ?2 ORDER BY time",
+    )?;
+    let events = stmt
+        .query_map([start_ms, end_ms], |row| {
+            Ok(AggScreenOn {
+                time_ms: row.get(0)?,
+                screen_on_secs: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(events)
 }

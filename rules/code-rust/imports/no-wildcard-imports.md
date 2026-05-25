@@ -1,6 +1,6 @@
 # Avoid wildcard imports in production code
 
-Rule id: `imports/avoid-wildcard-imports`
+Rule id: `imports/no-wildcard-imports`
 
 **Rationale:** Wildcard imports hide where names come from, make accidental name
 capture easier, and make review harder when APIs change.

@@ -5,7 +5,16 @@
 
 use chrono::{Datelike as _, Local, NaiveDate, TimeZone as _, Timelike as _};
 
+/// Returns today's date as `"YYYY-MM-DD"` in local time.
+pub fn today() -> String {
+    format_local_date(chrono::Utc::now().timestamp_millis())
+}
+
 /// Returns `"YYYY-MM-DD"` for the given timestamp in local time.
+///
+/// # Panics
+///
+/// Panics if `ts_ms` is outside the range representable by `chrono`.
 pub fn format_local_date(ts_ms: i64) -> String {
     let dt = Local
         .timestamp_millis_opt(ts_ms)
@@ -15,6 +24,11 @@ pub fn format_local_date(ts_ms: i64) -> String {
 }
 
 /// Adds one calendar day to a `"YYYY-MM-DD"` string.
+///
+/// # Panics
+///
+/// Panics if `date` is not a valid `"YYYY-MM-DD"` string, or if the result
+/// would overflow the calendar.
 pub fn next_day(date: &str) -> String {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").expect("next_day: invalid date format");
     let next = d.succ_opt().expect("next_day: date overflow");
@@ -25,6 +39,11 @@ pub fn next_day(date: &str) -> String {
 ///
 /// Mirrors `new Date(year, month-1, day, 6, 0, 0).getTime()` in TypeScript,
 /// which constructs a local-time datetime.
+///
+/// # Panics
+///
+/// Panics if `date` is not a valid `"YYYY-MM-DD"` string, or if 06:00 on
+/// that date is ambiguous or non-existent in the local timezone (DST gap).
 pub fn six_am_of(date: &str) -> i64 {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").expect("six_am_of: invalid date format");
     let dt = Local
@@ -38,13 +57,16 @@ pub fn six_am_of(date: &str) -> i64 {
 ///
 /// Times before 06:00 local belong to the previous calendar day.
 /// This mirrors the TypeScript `effectiveDay(timestampMs)`.
+///
+/// # Panics
+///
+/// Panics if `ts_ms` is outside the range representable by `chrono`.
 pub fn effective_day(ts_ms: i64) -> String {
     let dt = Local
         .timestamp_millis_opt(ts_ms)
         .single()
         .expect("effective_day: timestamp out of range");
     if dt.hour() < 6 {
-        // Subtract 6 hours and take the date
         format_local_date(ts_ms - 6 * 60 * 60 * 1000)
     } else {
         format!("{:04}-{:02}-{:02}", dt.year(), dt.month(), dt.day())
@@ -52,15 +74,15 @@ pub fn effective_day(ts_ms: i64) -> String {
 }
 
 /// Returns the number of days in a month given `"YYYYMM"`.
+///
+/// # Panics
+///
+/// Panics if `yyyymm` is not a valid `"YYYYMM"` string with a parseable year
+/// and month in 01–12.
 pub fn days_in_month(yyyymm: &str) -> u32 {
     let year: i32 = yyyymm[..4].parse().expect("days_in_month: invalid year");
     let month: u32 = yyyymm[4..6].parse().expect("days_in_month: invalid month");
-    // Last day of month = first day of next month minus one day
-    let (next_year, next_month) = if month == 12 {
-        (year + 1, 1u32)
-    } else {
-        (year, month + 1)
-    };
+    let (next_year, next_month) = if month == 12 { (year + 1, 1u32) } else { (year, month + 1) };
     NaiveDate::from_ymd_opt(next_year, next_month, 1)
         .expect("days_in_month: overflow")
         .pred_opt()
@@ -69,6 +91,10 @@ pub fn days_in_month(yyyymm: &str) -> u32 {
 }
 
 /// Returns all `"YYYY-MM-DD"` dates in a month given `"YYYYMM"`.
+///
+/// # Panics
+///
+/// Panics under the same conditions as [`days_in_month`].
 pub fn build_month_dates(yyyymm: &str) -> Vec<String> {
     let year = &yyyymm[..4];
     let month = &yyyymm[4..6];
@@ -88,7 +114,6 @@ mod tests {
 
     #[test]
     fn six_am_round_trip() {
-        // six_am_of a date, then effective_day of that timestamp should return the same date.
         let date = "2024-03-15";
         let ts = six_am_of(date);
         assert_eq!(effective_day(ts), date);
@@ -96,10 +121,9 @@ mod tests {
 
     #[test]
     fn effective_day_before_6am_rolls_back() {
-        // 05:59 local on 2024-03-15 should belong to 2024-03-14.
         let date = "2024-03-15";
         let six_am_ts = six_am_of(date);
-        let before_6am = six_am_ts - 1; // 05:59:59.999
+        let before_6am = six_am_ts - 1;
         assert_eq!(effective_day(before_6am), "2024-03-14");
     }
 

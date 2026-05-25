@@ -10,7 +10,7 @@ This rule book contains the enforceable Rust coding rules for this repository. U
 
 ## Organize Modules for Navigation
 
-### `modules/use-mod-rs-directory-root`
+### `modules/mod-rs-directory-root`
 
 Use `mod.rs` for the root of a directory module
 
@@ -151,7 +151,7 @@ fn parse_token(...) -> Token { ... }
 
 ## Keep Imports Local, Explicit, and Merge-Friendly
 
-### `imports/separate-imports-reexports`
+### `imports/separate-reexports`
 
 Separate private imports from public re-exports
 
@@ -198,14 +198,14 @@ use std::collections::hash_map::Entry;
 use serde::Deserialize as _;
 ```
 
-### `imports/sort-imports-per-group`
+### `imports/import-group-sort-order`
 
 Sort imports inside each import group
 
 **Rule:** Keep imports near the top of the file. Within each contiguous import
 group, sort imports version-wise. Keep `self` and `super` first when present.
 
-### `imports/avoid-wildcard-imports`
+### `imports/no-wildcard-imports`
 
 Avoid wildcard imports in production code
 
@@ -242,7 +242,7 @@ Follow standard Rust casing
 Treat acronyms as words: `Uuid`, `HttpClient`, `Stdin`, not `UUID`,
 `HTTPClient`, or `StdIn`.
 
-### `naming/standard-conversion-getter-iterator-naming`
+### `naming/standard-conversion-getter-iterator`
 
 Name conversions, getters, iterators, and constructors the standard way
 
@@ -647,7 +647,7 @@ impl std::error::Error for ParseError {}
 pub fn parse(input: &str) -> Result<Value, ParseError> { ... }
 ```
 
-### `errors/validate-at-boundary-type-system`
+### `errors/boundary-type-validation`
 
 Validate at the boundary, preferably in the type system
 
@@ -667,7 +667,7 @@ behavior.
 
 ## Make Destructors Boring
 
-### `destructors/infallible-nonblocking-destructors`
+### `destructors/infallible-nonblocking`
 
 Destructors must not fail, panic, or block
 
@@ -795,7 +795,7 @@ Prefer safe Rust, and forbid `unsafe` when you do not need it
 **Rule:** If a crate does not need `unsafe`, forbid it at the crate root. If
 `unsafe` is necessary, make the block small, local, and justified.
 
-### `unsafe/unsafe-internals-safe-apis-explicit-contracts`
+### `unsafe/internals-safe-apis-explicit-contracts`
 
 Encapsulate unsafe internals behind safe APIs or explicit unsafe contracts
 
@@ -830,7 +830,7 @@ Do not rely on `Drop` for security-sensitive cleanup
 
 ## Keep FFI Thin, Typed, and Defensive
 
-### `ffi-boundaries/ffi-raw-bindings-safe-wrappers`
+### `ffi-boundaries/raw-bindings-safe-wrappers`
 
 Split FFI into raw bindings and safe wrappers
 

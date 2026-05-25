@@ -1,6 +1,6 @@
 # Encapsulate unsafe internals behind safe APIs or explicit unsafe contracts
 
-Rule id: `unsafe/unsafe-internals-safe-apis-explicit-contracts`
+Rule id: `unsafe/internals-safe-apis-explicit-contracts`
 
 **Rationale:** The entire point of encapsulation is to keep undefined behavior
 out of safe call sites.

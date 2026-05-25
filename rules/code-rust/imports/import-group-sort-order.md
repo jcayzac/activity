@@ -1,6 +1,6 @@
 # Sort imports inside each import group
 
-Rule id: `imports/sort-imports-per-group`
+Rule id: `imports/import-group-sort-order`
 
 **Rationale:** Stable ordering reduces noise in diffs and makes missing or
 duplicate imports easier to spot.

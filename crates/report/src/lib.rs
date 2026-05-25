@@ -5,16 +5,18 @@
 
 use std::collections::HashMap;
 
-use timeline::{Interval, IntervalLabel, prepare_intervals_for_render};
+use timeline::prepare_intervals_for_render;
 
-// Re-export IntervalLabel for downstream consumers.
-pub use timeline::IntervalLabel as IntervalLabelReexport;
+pub use timeline::Interval;
+pub use timeline::IntervalLabel;
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+/// One display interval in a day report: a slice of the timeline trimmed
+/// between the first and last active interval.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReportInterval {
     pub first_ms: i64,
     pub last_ms: i64,
@@ -22,7 +24,8 @@ pub struct ReportInterval {
     pub location: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+/// The complete rendered data for one calendar day.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DayReport {
     pub date: String,
     pub intervals: Vec<ReportInterval>,
@@ -31,24 +34,29 @@ pub struct DayReport {
     pub other_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+/// A non-active interval (break or transit) that falls inside a day's active window.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonthBreak {
     pub first_ms: i64,
     pub last_ms: i64,
-    pub label: IntervalLabel, // Break or Transit only
+    /// Always `Break` or `Transit`.
+    pub label: IntervalLabel,
 }
 
-#[derive(Debug, Clone)]
+/// One row in a month report, corresponding to one calendar day.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonthReportRow {
     pub date: String,
     pub first_ms: i64,
     pub last_ms: i64,
     pub total_active_ms: i64,
-    pub locations: Vec<String>, // dominant first, then others sorted
+    /// Dominant location first, then others sorted alphabetically.
+    pub locations: Vec<String>,
     pub breaks: Vec<MonthBreak>,
 }
 
-#[derive(Debug, Clone)]
+/// The complete rendered data for one calendar month.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonthReport {
     pub yyyymm: String,
     pub rows: Vec<MonthReportRow>,
@@ -209,7 +217,8 @@ pub fn build_month_report(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::build_day_report;
+    use timeline::{Interval, IntervalLabel};
 
     fn make_interval(first_ms: i64, last_ms: i64, label: IntervalLabel) -> Interval {
         Interval {

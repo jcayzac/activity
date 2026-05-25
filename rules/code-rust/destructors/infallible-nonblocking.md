@@ -1,6 +1,6 @@
 # Destructors must not fail, panic, or block
 
-Rule id: `destructors/infallible-nonblocking-destructors`
+Rule id: `destructors/infallible-nonblocking`
 
 **Rationale:** Drops can run during unwinding and during hard-to-debug control
 paths. Failure or blocking in `Drop` turns cleanup into a second source of bugs.

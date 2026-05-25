@@ -1,13 +1,15 @@
 [package]
-name        = "location"
-version.workspace     = true
-edition.workspace     = true
+name = "location"
+version.workspace = true
+edition.workspace = true
 rust-version.workspace = true
-authors.workspace     = true
-license.workspace     = true
+authors.workspace = true
+license.workspace = true
 
 [dependencies]
-anyhow    = { workspace = true }
-camino    = { workspace = true }
-chrono    = { workspace = true }
-rusqlite  = { workspace = true }
+timeline   = { workspace = true }
+anyhow     = { workspace = true }
+camino     = { workspace = true }
+chrono     = { workspace = true }
+rusqlite   = { workspace = true }
+thiserror  = { workspace = true }

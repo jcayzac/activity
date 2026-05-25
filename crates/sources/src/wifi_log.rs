@@ -10,6 +10,7 @@ use chrono::Datelike as _;
 use rusqlite::Connection;
 use tokio::process::Command;
 
+use crate::SourcesError;
 use crate::biome_wifi::WifiSession;
 
 const WIFI_LOG_DIR: &str = "/private/var/log";
@@ -407,7 +408,8 @@ fn correlate_with_biome(db: &Connection, biome_sessions: &[WifiSession]) -> anyh
     };
 
     // Build session→subnets map and time-window proximity list
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
+    use std::collections::HashSet;
     let mut session_subnets: HashMap<(i64, i64), HashSet<String>> = HashMap::new();
     let mut session_ssid: HashMap<(i64, i64), String> = HashMap::new();
 
@@ -563,23 +565,24 @@ pub async fn open_wifi_log_db(
     Ok(db)
 }
 
-pub fn wifi_ip_events(db: &Connection) -> Vec<WifiIpRow> {
+pub fn wifi_ip_events(db: &Connection) -> Result<Vec<WifiIpRow>, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT timestamp, ip, subnet FROM ip_events ORDER BY timestamp")
-        .expect("failed to prepare ip_events query");
-    stmt.query_map([], |row| {
-        Ok(WifiIpRow {
-            time_ms: row.get(0)?,
-            ip: row.get(1)?,
-            subnet: row.get(2)?,
-        })
-    })
-    .expect("failed to query ip_events")
-    .filter_map(|r| r.ok())
-    .collect()
+        .prepare_cached("SELECT timestamp, ip, subnet FROM ip_events ORDER BY timestamp")?;
+    let events = stmt
+        .query_map([], |row| {
+            Ok(WifiIpRow {
+                time_ms: row.get(0)?,
+                ip: row.get(1)?,
+                subnet: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(events)
 }
 
-pub fn build_location_groups(db: &Connection) -> std::collections::HashMap<String, String> {
+pub fn build_location_groups(
+    db: &Connection,
+) -> Result<std::collections::HashMap<String, String>, SourcesError> {
     // Union-Find: canonical = lexicographically smallest in connected component
     let mut parent: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
@@ -613,14 +616,11 @@ pub fn build_location_groups(db: &Connection) -> std::collections::HashMap<Strin
     // Load co-occurrences
     let pairs: Vec<(String, String)> = {
         let mut stmt = db
-            .prepare_cached("SELECT subnet_a, subnet_b FROM subnet_cooccurrence")
-            .expect("failed to prepare subnet_cooccurrence query");
+            .prepare_cached("SELECT subnet_a, subnet_b FROM subnet_cooccurrence")?;
         stmt.query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .expect("failed to query subnet_cooccurrence")
-        .filter_map(|r| r.ok())
-        .collect()
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
     };
 
     for (a, b) in &pairs {
@@ -630,12 +630,9 @@ pub fn build_location_groups(db: &Connection) -> std::collections::HashMap<Strin
     // Resolve all known subnets
     let subnets: Vec<String> = {
         let mut stmt = db
-            .prepare_cached("SELECT DISTINCT subnet FROM ip_events WHERE subnet != ''")
-            .expect("failed to prepare subnet query");
-        stmt.query_map([], |row| row.get::<_, String>(0))
-            .expect("failed to query subnets")
-            .filter_map(|r| r.ok())
-            .collect()
+            .prepare_cached("SELECT DISTINCT subnet FROM ip_events WHERE subnet != ''")?;
+        stmt.query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
     };
 
     let mut result = std::collections::HashMap::new();
@@ -643,7 +640,7 @@ pub fn build_location_groups(db: &Connection) -> std::collections::HashMap<Strin
         let root = find(&mut parent, subnet);
         result.insert(subnet.clone(), root);
     }
-    result
+    Ok(result)
 }
 
 // ---------------------------------------------------------------------------

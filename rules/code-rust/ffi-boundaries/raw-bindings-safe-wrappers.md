@@ -1,6 +1,6 @@
 # Split FFI into raw bindings and safe wrappers
 
-Rule id: `ffi-boundaries/ffi-raw-bindings-safe-wrappers`
+Rule id: `ffi-boundaries/raw-bindings-safe-wrappers`
 
 **Rationale:** Raw FFI reflects foreign unsafety; the safe wrapper is where
 Rust-side invariants are restored and reviewed.

@@ -1,7 +1,7 @@
 #![warn(clippy::all)]
-#![allow(clippy::all, non_camel_case_types)]
 #![forbid(unsafe_code)]
 
+#[allow(clippy::all, non_camel_case_types)]
 pub mod biome {
     include!(concat!(env!("OUT_DIR"), "/biome.rs"));
 }
@@ -63,11 +63,11 @@ pub fn parse_infocus_record(slot: &[u8]) -> Option<InFocusEvent> {
             Ok(pair) => pair,
         };
         // Stop if wire type conflicts with the declared schema for this field.
-        if let Some(expected) = expected_wire(field) {
-            if wire != expected {
-                cursor = before;
-                break;
-            }
+        if let Some(expected) = expected_wire(field)
+            && wire != expected
+        {
+            cursor = before;
+            break;
         }
         match wire {
             WireType::Varint => {
@@ -198,7 +198,7 @@ fn parse_wifi_record(buf: &[u8]) -> Option<WifiConnectionEvent> {
     let mut cocoa_end: Option<f64> = None;
     let mut ssid: Option<String> = None;
 
-    while !cursor.is_empty() && !(cocoa_start.is_some() && cocoa_end.is_some() && ssid.is_some()) {
+    while !(cursor.is_empty() || cocoa_start.is_some() && cocoa_end.is_some() && ssid.is_some()) {
         let Ok((field, wire)) = decode_key(&mut cursor) else {
             break;
         };
@@ -377,7 +377,7 @@ mod tests {
             .filter(|e| {
                 e.file_name()
                     .to_str()
-                    .map_or(false, |n| n.chars().all(|c| c.is_ascii_digit()))
+                    .is_some_and(|n| n.chars().all(|c| c.is_ascii_digit()))
             })
             .map(|e| camino::Utf8PathBuf::from_path_buf(e.path()).unwrap())
             .collect();

@@ -8,17 +8,32 @@ use anyhow::Context as _;
 use camino::Utf8Path;
 use rusqlite::Connection;
 
+use crate::SourcesError;
+
 // ---------------------------------------------------------------------------
-// Open focus cache DB (used by both knowledge and biome_infocus modules)
+// Open knowledge cache DB
 // ---------------------------------------------------------------------------
 
-pub fn open_focus_cache_db(path: &Utf8Path) -> anyhow::Result<Connection> {
+/// Opens (or creates) the knowledge cache DB at `path`.
+///
+/// The DB holds `focus_periods` and `knowledge_coverage` — data sourced
+/// from knowledgeC.db.
+/// Opens (or creates) the knowledge cache DB at `path`.
+///
+/// The DB holds `focus_periods` and `knowledge_coverage` — data sourced
+/// from knowledgeC.db.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created or the DB cannot be opened.
+pub fn open_knowledge_db(path: &Utf8Path) -> Result<Connection, SourcesError> {
+    use anyhow::Context as _;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create cache dir {parent}"))?;
     }
     let conn = Connection::open(path.as_std_path())
-        .with_context(|| format!("failed to open focus cache db at {path}"))?;
+        .with_context(|| format!("failed to open knowledge cache db at {path}"))?;
     conn.execute_batch(
         "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
          CREATE TABLE IF NOT EXISTS focus_periods (
@@ -29,16 +44,9 @@ pub fn open_focus_cache_db(path: &Utf8Path) -> anyhow::Result<Connection> {
          );
          CREATE TABLE IF NOT EXISTS knowledge_coverage (
              imported_through INTEGER NOT NULL PRIMARY KEY
-         );
-         CREATE TABLE IF NOT EXISTS infocus_events (
-             time      INTEGER NOT NULL PRIMARY KEY,
-             bundle_id TEXT    NOT NULL
-         );
-         CREATE TABLE IF NOT EXISTS infocus_coverage (
-             imported_through INTEGER NOT NULL PRIMARY KEY
          );",
     )
-    .with_context(|| "failed to initialize focus cache schema")?;
+    .with_context(|| "failed to initialize knowledge cache schema")?;
     Ok(conn)
 }
 
@@ -63,41 +71,25 @@ pub use timeline::FocusPeriod;
 // Schema helpers
 // ---------------------------------------------------------------------------
 
-pub fn init_knowledge_schema(db: &Connection) {
-    db.execute_batch(
-        "CREATE TABLE IF NOT EXISTS focus_periods (
-             first     INTEGER NOT NULL,
-             last      INTEGER NOT NULL,
-             bundle_id TEXT    NOT NULL,
-             PRIMARY KEY (first, bundle_id)
-         );
-         CREATE TABLE IF NOT EXISTS knowledge_coverage (
-             imported_through INTEGER NOT NULL PRIMARY KEY
-         );",
-    )
-    .expect("failed to init knowledge schema");
-}
 
-pub fn knowledge_coverage(db: &Connection) -> i64 {
+pub fn knowledge_coverage(db: &Connection) -> Result<i64, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT imported_through FROM knowledge_coverage LIMIT 1")
-        .expect("failed to prepare knowledge_coverage query");
-    let mut rows = stmt.query([]).expect("failed to query knowledge_coverage");
-    if let Some(row) = rows.next().expect("row error") {
-        row.get(0).unwrap_or(0)
+        .prepare_cached("SELECT imported_through FROM knowledge_coverage LIMIT 1")?;
+    let mut rows = stmt.query([])?;
+    if let Some(row) = rows.next()? {
+        Ok(row.get(0).unwrap_or(0))
     } else {
-        0
+        Ok(0)
     }
 }
 
-fn set_knowledge_coverage(db: &Connection, ms: i64) {
-    db.execute_batch("DELETE FROM knowledge_coverage")
-        .expect("failed to delete knowledge_coverage");
+fn set_knowledge_coverage(db: &Connection, ms: i64) -> Result<(), SourcesError> {
+    db.execute_batch("DELETE FROM knowledge_coverage")?;
     db.execute(
         "INSERT INTO knowledge_coverage (imported_through) VALUES (?1)",
         [ms],
-    )
-    .expect("failed to insert knowledge_coverage");
+    )?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -108,11 +100,19 @@ fn set_knowledge_coverage(db: &Connection, ms: i64) {
 ///
 /// Returns the count of newly inserted rows.  A missing `knowledgeC.db` is
 /// silently ignored (returns 0).
+/// Imports `/app/usage` sessions from `knowledgeC.db` that end after `since_ms`.
+///
+/// Returns the count of newly inserted rows. A missing or inaccessible
+/// `knowledgeC.db` is silently ignored (returns 0).
+///
+/// # Errors
+///
+/// Returns an error if the cache DB operations fail.
 pub fn import_knowledge_focus_periods(
     db: &Connection,
     knowledge_db_path: &Utf8Path,
     since_ms: i64,
-) -> anyhow::Result<i64> {
+) -> Result<i64, SourcesError> {
     let kdb = match Connection::open_with_flags(
         knowledge_db_path.as_std_path(),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -122,8 +122,9 @@ pub fn import_knowledge_focus_periods(
             return Ok(0);
         }
         Err(e) => {
-            return Err(e)
-                .with_context(|| format!("failed to open knowledgeC.db at {knowledge_db_path}"));
+            return Err(anyhow::Error::from(e)
+                .context(format!("failed to open knowledgeC.db at {knowledge_db_path}"))
+                .into());
         }
     };
 
@@ -174,26 +175,25 @@ pub fn import_knowledge_focus_periods(
     // Advance coverage watermark
     if let Some((_, end_cocoa, _)) = rows.last() {
         let latest_ms = cocoa_to_ms(*end_cocoa);
-        set_knowledge_coverage(db, latest_ms);
+        set_knowledge_coverage(db, latest_ms)?;
     }
 
     Ok(inserted)
 }
 
-pub fn all_focus_periods(db: &Connection) -> Vec<FocusPeriod> {
+pub fn all_focus_periods(db: &Connection) -> Result<Vec<FocusPeriod>, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT first, last, bundle_id FROM focus_periods ORDER BY first")
-        .expect("failed to prepare focus_periods query");
-    stmt.query_map([], |row| {
-        Ok(FocusPeriod {
-            first_ms: row.get(0)?,
-            last_ms: row.get(1)?,
-            bundle_id: row.get(2)?,
-        })
-    })
-    .expect("failed to query focus_periods")
-    .filter_map(|r| r.ok())
-    .collect()
+        .prepare_cached("SELECT first, last, bundle_id FROM focus_periods ORDER BY first")?;
+    let periods = stmt
+        .query_map([], |row| {
+            Ok(FocusPeriod {
+                first_ms: row.get(0)?,
+                last_ms: row.get(1)?,
+                bundle_id: row.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(periods)
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +202,7 @@ pub fn all_focus_periods(db: &Connection) -> Vec<FocusPeriod> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{cocoa_to_ms, ms_to_cocoa};
 
     #[test]
     fn cocoa_to_ms_known_value() {

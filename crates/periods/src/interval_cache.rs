@@ -1,18 +1,47 @@
 // Persistence layer for the interval cache (active-on.db).
 // Ported from lib/interval-cache.ts.
 
-use rusqlite::Connection;
+use camino::Utf8Path;
 
 use timeline::date_utils::effective_day;
 use timeline::{Interval, IntervalLabel};
 
 // ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, thiserror::Error)]
+pub enum IntervalCacheError {
+    #[error(transparent)]
+    Db(#[from] rusqlite::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+// ---------------------------------------------------------------------------
+// Opaque DB handle
+// ---------------------------------------------------------------------------
+
+/// An open connection to the interval cache DB.
+///
+/// Wraps `rusqlite::Connection` so the storage engine does not appear in the
+/// public API of the use-case layer.
+pub struct IntervalCacheDb(rusqlite::Connection);
+
+// ---------------------------------------------------------------------------
 // Open DB
 // ---------------------------------------------------------------------------
 
-pub fn open_interval_cache_db(path: &camino::Utf8Path) -> anyhow::Result<Connection> {
+/// Opens (or creates) the interval cache DB at `path`.
+pub fn open_interval_cache_db(path: &Utf8Path) -> Result<IntervalCacheDb, IntervalCacheError> {
     use anyhow::Context as _;
-    let conn = Connection::open(path.as_std_path())
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create cache dir {parent}"))?;
+    }
+    let conn = rusqlite::Connection::open(path.as_std_path())
         .with_context(|| format!("failed to open interval cache db at {path}"))?;
     conn.execute_batch(
         "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
@@ -29,13 +58,15 @@ pub fn open_interval_cache_db(path: &camino::Utf8Path) -> anyhow::Result<Connect
          );",
     )
     .with_context(|| "failed to initialize interval cache schema")?;
-    Ok(conn)
+    Ok(IntervalCacheDb(conn))
 }
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
+/// Cached intervals for one calendar date.
+#[derive(Debug, Clone)]
 pub struct CachedIntervals {
     pub provisional: bool,
     pub intervals: Vec<Interval>,
@@ -45,18 +76,24 @@ pub struct CachedIntervals {
 // Read
 // ---------------------------------------------------------------------------
 
-pub fn read_cached_intervals(db: &Connection, date: &str) -> Option<CachedIntervals> {
-    let provisional: i64 = db
-        .query_row(
-            "SELECT provisional FROM interval_cache WHERE date = ?1",
-            rusqlite::params![date],
-            |row| row.get(0),
-        )
-        .ok()?;
+/// Returns the cached intervals for `date`, or `None` if the date has no entry.
+pub fn read_cached_intervals(
+    db: &IntervalCacheDb,
+    date: &str,
+) -> Result<Option<CachedIntervals>, IntervalCacheError> {
+    let provisional: i64 = match db.0.query_row(
+        "SELECT provisional FROM interval_cache WHERE date = ?1",
+        rusqlite::params![date],
+        |row| row.get(0),
+    ) {
+        Ok(v) => v,
+        Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
 
     let mut stmt = db
-        .prepare("SELECT first, last, label FROM intervals WHERE date = ?1 ORDER BY first")
-        .expect("read_cached_intervals: prepare failed");
+        .0
+        .prepare("SELECT first, last, label FROM intervals WHERE date = ?1 ORDER BY first")?;
 
     let intervals: Vec<Interval> = stmt
         .query_map(rusqlite::params![date], |row| {
@@ -64,9 +101,9 @@ pub fn read_cached_intervals(db: &Connection, date: &str) -> Option<CachedInterv
             let last_ms: i64 = row.get(1)?;
             let label_str: String = row.get(2)?;
             Ok((first_ms, last_ms, label_str))
-        })
-        .expect("read_cached_intervals: query failed")
-        .filter_map(|r| r.ok())
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
         .filter_map(|(first_ms, last_ms, label_str)| {
             let label = match label_str.as_str() {
                 "active" => IntervalLabel::Active,
@@ -74,47 +111,35 @@ pub fn read_cached_intervals(db: &Connection, date: &str) -> Option<CachedInterv
                 "transit" => IntervalLabel::Transit,
                 _ => return None,
             };
-            Some(Interval {
-                first_ms,
-                last_ms,
-                label,
-                location: None,
-            })
+            Some(Interval { first_ms, last_ms, label, location: None })
         })
         .collect();
 
-    Some(CachedIntervals {
-        provisional: provisional == 1,
-        intervals,
-    })
+    Ok(Some(CachedIntervals { provisional: provisional == 1, intervals }))
 }
 
 // ---------------------------------------------------------------------------
 // Write
 // ---------------------------------------------------------------------------
 
+/// Writes (or replaces) the cached intervals for `date`.
 pub fn write_cached_intervals(
-    db: &Connection,
+    db: &IntervalCacheDb,
     date: &str,
     intervals: &[Interval],
     provisional: bool,
-) {
-    db.execute(
+) -> Result<(), IntervalCacheError> {
+    db.0.execute(
         "INSERT INTO interval_cache (date, provisional) VALUES (?1, ?2)
          ON CONFLICT (date) DO UPDATE SET provisional = excluded.provisional",
         rusqlite::params![date, if provisional { 1i64 } else { 0i64 }],
-    )
-    .expect("write_cached_intervals: upsert meta failed");
+    )?;
 
-    db.execute(
-        "DELETE FROM intervals WHERE date = ?1",
-        rusqlite::params![date],
-    )
-    .expect("write_cached_intervals: delete failed");
+    db.0.execute("DELETE FROM intervals WHERE date = ?1", rusqlite::params![date])?;
 
     let mut stmt = db
-        .prepare("INSERT INTO intervals (date, first, last, label) VALUES (?1, ?2, ?3, ?4)")
-        .expect("write_cached_intervals: prepare insert failed");
+        .0
+        .prepare("INSERT INTO intervals (date, first, last, label) VALUES (?1, ?2, ?3, ?4)")?;
 
     for iv in intervals {
         let label_str = match iv.label {
@@ -122,9 +147,10 @@ pub fn write_cached_intervals(
             IntervalLabel::Break => "break",
             IntervalLabel::Transit => "transit",
         };
-        stmt.execute(rusqlite::params![date, iv.first_ms, iv.last_ms, label_str])
-            .expect("write_cached_intervals: insert failed");
+        stmt.execute(rusqlite::params![date, iv.first_ms, iv.last_ms, label_str])?;
     }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +158,7 @@ pub fn write_cached_intervals(
 // ---------------------------------------------------------------------------
 
 /// Returns `true` when the cached data for `date` can be used without
-/// recomputing.  Mirrors `shouldReuseCache` in lib/interval-cache.ts.
+/// recomputing. Mirrors `shouldReuseCache` in lib/interval-cache.ts.
 ///
 /// Returns `false` if:
 /// - `date >= today`  (future or current calendar day)
@@ -154,37 +180,16 @@ pub fn should_reuse_cache(date: &str, today: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_cached_intervals, should_reuse_cache, write_cached_intervals};
+    use super::{
+        CachedIntervals, IntervalCacheDb, read_cached_intervals, should_reuse_cache,
+        write_cached_intervals,
+    };
     use timeline::date_utils::six_am_of;
     use timeline::{Interval, IntervalLabel};
 
-    #[test]
-    fn should_reuse_cache_future_date() {
-        assert!(!should_reuse_cache("2099-01-01", "2024-01-01"));
-    }
-
-    #[test]
-    fn should_reuse_cache_today() {
-        // today == date => false
-        assert!(!should_reuse_cache("2024-03-15", "2024-03-15"));
-    }
-
-    #[test]
-    fn should_reuse_cache_tomorrow() {
-        assert!(!should_reuse_cache("2099-12-31", "2024-03-15"));
-    }
-
-    #[test]
-    fn should_reuse_cache_old_past_date() {
-        // A date safely in the past relative to "now" — not the effective day.
-        // We use "1970-01-01" which is definitely not the effective day.
-        assert!(should_reuse_cache("1970-01-01", "2099-12-31"));
-    }
-
-    #[test]
-    fn round_trip_write_read() {
-        let db = rusqlite::Connection::open_in_memory().unwrap();
-        db.execute_batch(
+    fn make_in_memory_db() -> IntervalCacheDb {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
             "CREATE TABLE interval_cache (
                 date        TEXT    NOT NULL PRIMARY KEY,
                 provisional INTEGER NOT NULL DEFAULT 0
@@ -198,7 +203,32 @@ mod tests {
             );",
         )
         .unwrap();
+        IntervalCacheDb(conn)
+    }
 
+    #[test]
+    fn should_reuse_cache_future_date() {
+        assert!(!should_reuse_cache("2099-01-01", "2024-01-01"));
+    }
+
+    #[test]
+    fn should_reuse_cache_today() {
+        assert!(!should_reuse_cache("2024-03-15", "2024-03-15"));
+    }
+
+    #[test]
+    fn should_reuse_cache_tomorrow() {
+        assert!(!should_reuse_cache("2099-12-31", "2024-03-15"));
+    }
+
+    #[test]
+    fn should_reuse_cache_old_past_date() {
+        assert!(should_reuse_cache("1970-01-01", "2099-12-31"));
+    }
+
+    #[test]
+    fn round_trip_write_read() {
+        let db = make_in_memory_db();
         let date = "2024-03-15";
         let six_am = six_am_of(date);
         let ivs = vec![
@@ -216,12 +246,19 @@ mod tests {
             },
         ];
 
-        write_cached_intervals(&db, date, &ivs, false);
-        let cached = read_cached_intervals(&db, date).unwrap();
+        write_cached_intervals(&db, date, &ivs, false).unwrap();
+        let cached: CachedIntervals = read_cached_intervals(&db, date).unwrap().unwrap();
         assert!(!cached.provisional);
         assert_eq!(cached.intervals.len(), 2);
         assert_eq!(cached.intervals[0].first_ms, six_am);
         assert_eq!(cached.intervals[0].label, IntervalLabel::Active);
         assert_eq!(cached.intervals[1].label, IntervalLabel::Break);
+    }
+
+    #[test]
+    fn read_missing_date_returns_none() {
+        let db = make_in_memory_db();
+        let result = read_cached_intervals(&db, "2024-01-01").unwrap();
+        assert!(result.is_none());
     }
 }

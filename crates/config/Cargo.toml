@@ -1,10 +1,10 @@
 [package]
-name        = "config"
-version.workspace     = true
-edition.workspace     = true
+name = "config"
+version.workspace = true
+edition.workspace = true
 rust-version.workspace = true
-authors.workspace     = true
-license.workspace     = true
+authors.workspace = true
+license.workspace = true
 
 [dependencies]
 miette    = { workspace = true }

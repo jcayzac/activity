@@ -3,11 +3,19 @@ resolver = "2"
 members  = ["crates/*"]
 
 [workspace.package]
-version      = "0.1.0"
-edition      = "2024"
+version = "0.1.0"
+edition = "2024"
 rust-version = "1.94.0"
-authors      = ["Julien Cayzac"]
-license      = "MIT"
+authors = ["Julien Cayzac"]
+license = "MIT"
+description = "macOS activity timeline — builds a daily/monthly record of active periods from system data sources"
+repository = "https://github.com/jcayzac/activity"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = "warn"
 
 [workspace.dependencies]
 # cli
@@ -37,6 +45,7 @@ pretty_assertions = "1"
 prost-build = "0.13"
 # internal
 config   = { path = "crates/config" }
+periods  = { path = "crates/periods" }
 proto    = { path = "crates/proto" }
 sources  = { path = "crates/sources" }
 timeline = { path = "crates/timeline" }

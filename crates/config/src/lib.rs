@@ -95,6 +95,22 @@ pub struct Config {
 // Public API
 // ---------------------------------------------------------------------------
 
+/// Returns the application cache directory, derived from `$XDG_CACHE_HOME` or `$HOME`.
+pub fn cache_dir() -> Result<Utf8PathBuf, ConfigError> {
+    let base = if let Ok(xdg) = std::env::var("XDG_CACHE_HOME")
+        && !xdg.is_empty()
+    {
+        Utf8PathBuf::from(xdg)
+    } else {
+        let home = std::env::var("HOME").map_err(|_| ConfigError::NoHome)?;
+        if home.is_empty() {
+            return Err(ConfigError::NoHome);
+        }
+        Utf8PathBuf::from(home).join(".cache")
+    };
+    Ok(base.join("io.github.jcayzac.activity"))
+}
+
 fn config_base_dir() -> Result<Utf8PathBuf, ConfigError> {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
         && !xdg.is_empty()

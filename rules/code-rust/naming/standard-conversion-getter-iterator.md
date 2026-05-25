@@ -1,6 +1,6 @@
 # Name conversions, getters, iterators, and constructors the standard way
 
-Rule id: `naming/standard-conversion-getter-iterator-naming`
+Rule id: `naming/standard-conversion-getter-iterator`
 
 **Rationale:** These names communicate cost, ownership, mutability, and API
 role. They let users predict behavior without reading the implementation.

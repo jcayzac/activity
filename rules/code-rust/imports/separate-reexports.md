@@ -1,6 +1,6 @@
 # Separate private imports from public re-exports
 
-Rule id: `imports/separate-imports-reexports`
+Rule id: `imports/separate-reexports`
 
 **Rationale:** Private imports are implementation detail. Public re-exports are
 part of the module's outward shape and belong near the visible API.

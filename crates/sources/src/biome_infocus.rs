@@ -3,9 +3,10 @@
 //! Only gained-focus events (field 3 = 1) are imported — they are direct
 //! equivalents of powerlog focus_events point events.
 
-use anyhow::Context as _;
 use camino::Utf8Path;
 use rusqlite::Connection;
+
+use crate::SourcesError;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -14,12 +15,32 @@ use rusqlite::Connection;
 pub use timeline::PointFocusEvent as InFocusEvent;
 
 // ---------------------------------------------------------------------------
-// Schema helpers
+// Open infocus cache DB
 // ---------------------------------------------------------------------------
 
-pub fn init_infocus_schema(db: &Connection) {
-    db.execute_batch(
-        "CREATE TABLE IF NOT EXISTS infocus_events (
+/// Opens (or creates) the InFocus cache DB at `path`.
+///
+/// The DB holds `infocus_events` and `infocus_coverage` — data sourced
+/// from Biome App.InFocus stream files.
+/// Opens (or creates) the InFocus cache DB at `path`.
+///
+/// The DB holds `infocus_events` and `infocus_coverage` — data sourced
+/// from Biome App.InFocus stream files.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created or the DB cannot be opened.
+pub fn open_infocus_db(path: &Utf8Path) -> Result<Connection, SourcesError> {
+    use anyhow::Context as _;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create cache dir {parent}"))?;
+    }
+    let conn = Connection::open(path.as_std_path())
+        .with_context(|| format!("failed to open infocus cache db at {path}"))?;
+    conn.execute_batch(
+        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+         CREATE TABLE IF NOT EXISTS infocus_events (
              time      INTEGER NOT NULL PRIMARY KEY,
              bundle_id TEXT    NOT NULL
          );
@@ -27,29 +48,29 @@ pub fn init_infocus_schema(db: &Connection) {
              imported_through INTEGER NOT NULL PRIMARY KEY
          );",
     )
-    .expect("failed to init infocus schema");
+    .with_context(|| "failed to initialize infocus cache schema")?;
+    Ok(conn)
 }
 
-pub fn infocus_coverage(db: &Connection) -> i64 {
+
+pub fn infocus_coverage(db: &Connection) -> Result<i64, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT imported_through FROM infocus_coverage LIMIT 1")
-        .expect("failed to prepare infocus_coverage query");
-    let mut rows = stmt.query([]).expect("failed to query infocus_coverage");
-    if let Some(row) = rows.next().expect("row error") {
-        row.get(0).unwrap_or(0)
+        .prepare_cached("SELECT imported_through FROM infocus_coverage LIMIT 1")?;
+    let mut rows = stmt.query([])?;
+    if let Some(row) = rows.next()? {
+        Ok(row.get(0).unwrap_or(0))
     } else {
-        0
+        Ok(0)
     }
 }
 
-fn set_infocus_coverage(db: &Connection, ms: i64) {
-    db.execute_batch("DELETE FROM infocus_coverage")
-        .expect("failed to delete infocus_coverage");
+fn set_infocus_coverage(db: &Connection, ms: i64) -> Result<(), SourcesError> {
+    db.execute_batch("DELETE FROM infocus_coverage")?;
     db.execute(
         "INSERT INTO infocus_coverage (imported_through) VALUES (?1)",
         [ms],
-    )
-    .expect("failed to insert infocus_coverage");
+    )?;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -60,19 +81,28 @@ fn set_infocus_coverage(db: &Connection, ms: i64) {
 ///
 /// Processes all numeric-named files in `stream_dir`, inserting only events
 /// with `time_ms > since_ms`. Returns the number of newly inserted events.
+/// Imports App.InFocus gained-focus events from Biome stream files.
+///
+/// Processes all numeric-named files in `stream_dir`, inserting only events
+/// with `time_ms > since_ms`. Returns the number of newly inserted events.
+///
+/// # Errors
+///
+/// Returns an error if the stream directory cannot be read or DB operations fail.
 pub async fn import_infocus_events(
     db: &Connection,
     stream_dir: &Utf8Path,
     since_ms: i64,
-) -> anyhow::Result<i64> {
+) -> Result<i64, SourcesError> {
     // Collect stream files (numeric names only, sorted)
     let mut stream_files: Vec<String> = Vec::new();
     match tokio::fs::read_dir(stream_dir.as_std_path()).await {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {}
         Err(e) => {
-            return Err(e)
-                .with_context(|| format!("failed to read infocus stream dir {stream_dir}"));
+            return Err(anyhow::Error::from(e)
+                .context(format!("failed to read infocus stream dir {stream_dir}"))
+                .into());
         }
         Ok(mut entries) => {
             while let Some(entry) = entries.next_entry().await? {
@@ -119,23 +149,22 @@ pub async fn import_infocus_events(
     tx.commit()?;
 
     if latest_ms > since_ms {
-        set_infocus_coverage(db, latest_ms);
+        set_infocus_coverage(db, latest_ms)?;
     }
 
     Ok(inserted)
 }
 
-pub fn all_infocus_events(db: &Connection) -> Vec<InFocusEvent> {
+pub fn all_infocus_events(db: &Connection) -> Result<Vec<InFocusEvent>, SourcesError> {
     let mut stmt = db
-        .prepare_cached("SELECT time, bundle_id FROM infocus_events ORDER BY time")
-        .expect("failed to prepare infocus_events query");
-    stmt.query_map([], |row| {
-        Ok(InFocusEvent {
-            time_ms: row.get(0)?,
-            bundle_id: row.get(1)?,
-        })
-    })
-    .expect("failed to query infocus_events")
-    .filter_map(|r| r.ok())
-    .collect()
+        .prepare_cached("SELECT time, bundle_id FROM infocus_events ORDER BY time")?;
+    let events = stmt
+        .query_map([], |row| {
+            Ok(InFocusEvent {
+                time_ms: row.get(0)?,
+                bundle_id: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(events)
 }

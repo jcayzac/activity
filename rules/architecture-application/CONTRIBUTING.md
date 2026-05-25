@@ -4,7 +4,7 @@ This rule book merges external architecture guidance into one enforceable house 
 
 ## Established precedence
 
-When sources disagree, precedence is: [PAR], [SRP], [CA], [SC], [HEX], [OA], [MS], [SL], [FOW], [AWS], [AWSQ], [ADR]. Lower-precedence sources are used only to fill gaps left by higher-precedence ones.
+When sources disagree, precedence is: [PAR], [SRP], [CA], [SC], [HEX], [OA], [MS], [SL], [FOW], [LAY], [AWS], [AWSQ], [ADR]. Lower-precedence sources are used only to fill gaps left by higher-precedence ones.
 
 Terms such as "domain", "use case", "application service", "port", and "adapter" are used as descriptive labels, not as a mandate to adopt any one named architecture.
 

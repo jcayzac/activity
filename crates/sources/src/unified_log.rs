@@ -9,12 +9,14 @@ use chrono::TimeZone as _;
 use rusqlite::Connection;
 use tokio::process::Command;
 
+use crate::SourcesError;
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 pub use timeline::InputEvent;
-pub use timeline::InputKind as InputEventKind;
+pub use timeline::InputKind;
 pub use timeline::ScreenEvent;
 pub use timeline::ScreenEventKind;
 
@@ -282,60 +284,68 @@ pub async fn open_unified_log_db(
     Ok(db)
 }
 
-pub fn read_screen_events(db: &Connection, start_ms: i64, end_ms: i64) -> Vec<ScreenEvent> {
-    let mut stmt = db
-        .prepare_cached(
-            "SELECT timestamp, kind FROM events \
-             WHERE kind IN ('screen_lock', 'screen_unlock') \
-             AND timestamp >= ?1 AND timestamp <= ?2 \
-             ORDER BY timestamp",
-        )
-        .expect("failed to prepare screen_events query");
+pub fn read_screen_events(
+    db: &Connection,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<Vec<ScreenEvent>, SourcesError> {
+    let mut stmt = db.prepare_cached(
+        "SELECT timestamp, kind FROM events \
+         WHERE kind IN ('screen_lock', 'screen_unlock') \
+         AND timestamp >= ?1 AND timestamp <= ?2 \
+         ORDER BY timestamp",
+    )?;
 
-    stmt.query_map([start_ms, end_ms], |row| {
-        let time_ms: i64 = row.get(0)?;
-        let kind_str: String = row.get(1)?;
-        Ok((time_ms, kind_str))
-    })
-    .expect("failed to query screen events")
-    .filter_map(|r| r.ok())
-    .filter_map(|(time_ms, kind_str)| {
-        let kind = match kind_str.as_str() {
-            "screen_lock" => ScreenEventKind::Lock,
-            "screen_unlock" => ScreenEventKind::Unlock,
-            _ => return None,
-        };
-        Some(ScreenEvent { time_ms, kind })
-    })
-    .collect()
+    let events = stmt
+        .query_map([start_ms, end_ms], |row| {
+            let time_ms: i64 = row.get(0)?;
+            let kind_str: String = row.get(1)?;
+            Ok((time_ms, kind_str))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|(time_ms, kind_str)| {
+            let kind = match kind_str.as_str() {
+                "screen_lock" => ScreenEventKind::Lock,
+                "screen_unlock" => ScreenEventKind::Unlock,
+                _ => return None,
+            };
+            Some(ScreenEvent { time_ms, kind })
+        })
+        .collect();
+    Ok(events)
 }
 
-pub fn read_input_events(db: &Connection, start_ms: i64, end_ms: i64) -> Vec<InputEvent> {
-    let mut stmt = db
-        .prepare_cached(
-            "SELECT timestamp, kind FROM events \
-             WHERE kind IN ('kbd', 'app_launch') \
-             AND timestamp >= ?1 AND timestamp <= ?2 \
-             ORDER BY timestamp",
-        )
-        .expect("failed to prepare input_events query");
+pub fn read_input_events(
+    db: &Connection,
+    start_ms: i64,
+    end_ms: i64,
+) -> Result<Vec<InputEvent>, SourcesError> {
+    let mut stmt = db.prepare_cached(
+        "SELECT timestamp, kind FROM events \
+         WHERE kind IN ('kbd', 'app_launch') \
+         AND timestamp >= ?1 AND timestamp <= ?2 \
+         ORDER BY timestamp",
+    )?;
 
-    stmt.query_map([start_ms, end_ms], |row| {
-        let time_ms: i64 = row.get(0)?;
-        let kind_str: String = row.get(1)?;
-        Ok((time_ms, kind_str))
-    })
-    .expect("failed to query input events")
-    .filter_map(|r| r.ok())
-    .filter_map(|(time_ms, kind_str)| {
-        let kind = match kind_str.as_str() {
-            "kbd" => InputEventKind::Kbd,
-            "app_launch" => InputEventKind::AppLaunch,
-            _ => return None,
-        };
-        Some(InputEvent { time_ms, kind })
-    })
-    .collect()
+    let events = stmt
+        .query_map([start_ms, end_ms], |row| {
+            let time_ms: i64 = row.get(0)?;
+            let kind_str: String = row.get(1)?;
+            Ok((time_ms, kind_str))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|(time_ms, kind_str)| {
+            let kind = match kind_str.as_str() {
+                "kbd" => InputKind::Kbd,
+                "app_launch" => InputKind::AppLaunch,
+                _ => return None,
+            };
+            Some(InputEvent { time_ms, kind })
+        })
+        .collect();
+    Ok(events)
 }
 
 // ---------------------------------------------------------------------------

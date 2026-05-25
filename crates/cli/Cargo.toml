@@ -1,10 +1,10 @@
 [package]
-name        = "activity"
-version.workspace     = true
-edition.workspace     = true
+name = "activity"
+version.workspace = true
+edition.workspace = true
 rust-version.workspace = true
-authors.workspace     = true
-license.workspace     = true
+authors.workspace = true
+license.workspace = true
 
 [[bin]]
 name = "activity"
@@ -12,16 +12,10 @@ path = "src/main.rs"
 
 [dependencies]
 config   = { workspace = true }
-proto    = { workspace = true }
-sources  = { workspace = true }
-timeline = { workspace = true }
-location = { workspace = true }
+periods  = { workspace = true }
 report   = { workspace = true }
-anyhow            = { workspace = true }
-thiserror         = { workspace = true }
-miette            = { workspace = true }
-clap              = { workspace = true }
-camino            = { workspace = true }
-chrono            = { workspace = true }
-tokio             = { workspace = true }
-rusqlite          = { workspace = true }
+timeline = { workspace = true }
+miette   = { workspace = true }
+camino   = { workspace = true }
+chrono   = { workspace = true }
+tokio    = { workspace = true }

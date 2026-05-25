@@ -394,9 +394,9 @@ Enforce important boundaries mechanically
 visibility, CI checks, lint rules, or architecture tests. Do not rely on tribal
 knowledge.
 
-## Prefer the Simplest Design That Preserves These Rules
+## Meta rules
 
-### `simplicity/least-complex-design`
+### `meta/least-complex-design`
 
 Choose the least complex design that preserves the rules
 
